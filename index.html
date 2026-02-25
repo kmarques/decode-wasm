@@ -32,15 +32,30 @@
       const ctx = canvas.getContext("2d");
       let width = canvas.width;
       let height = canvas.height;
-      const memoryPixelsAs = new WebAssembly.Memory({
+      const memoryPixels = new WebAssembly.Memory({
         initial: 100,
       });
       let imageBuffer;
       const { instance: instancePixelsAs } =
         await WebAssembly.instantiateStreaming(fetch("build/pixels_as.wasm"), {
           env: {
-            memory: memoryPixelsAs,
+            memory: memoryPixels,
             seed: Math.random,
+          },
+        });
+      const { instance: instancePixelsCpp } =
+        await WebAssembly.instantiateStreaming(fetch("build/pixels_cpp.wasm"), {
+          env: {
+            memory: memoryPixels,
+            seed: Math.random,
+          },
+        });
+
+      const memoryParticles = new WebAssembly.Memory({ initial: 10 });
+      const { instance: instanceParticles } =
+        await WebAssembly.instantiateStreaming(fetch("build/particles.wasm"), {
+          env: {
+            memory: memoryParticles,
           },
         });
 
@@ -49,7 +64,9 @@
       const { is_premier } = instanceIsPremier.exports;
       const { fibo } = instanceFibo.exports;
       const { cesar } = instanceCesar.exports;
-      const { generate_pixels } = instancePixelsAs.exports;
+      const { generate_pixels_as } = instancePixelsAs.exports;
+      const { generate_pixels_cpp } = instancePixelsCpp.exports;
+      const { simulate_particles } = instanceParticles.exports;
 
       const displayResult = (id, result) => {
         document.getElementById(id).innerHTML = `Résultat : ${result}`;
@@ -109,26 +126,34 @@
         canvas.height = height;
 
         const neededSize = width * height * 4;
-        const currentPages = memoryPixelsAs.buffer.byteLength / 65536;
+        const currentPages = memoryPixels.buffer.byteLength / 65536;
         const neededPages = Math.ceil(neededSize / 65536);
         if (neededPages > currentPages) {
-          memoryPixelsAs.grow(neededPages - currentPages);
+          memoryPixels.grow(neededPages - currentPages);
         }
-        imageBuffer = new Uint8ClampedArray(
-          memoryPixelsAs.buffer,
-          0,
-          neededSize,
-        );
+        imageBuffer = new Uint8ClampedArray(memoryPixels.buffer, 0, neededSize);
 
         const fpsDisplay = document.getElementById("fps_display");
         let lastTime = performance.now();
         let frameCount = 0;
 
-        const useWasm = document.querySelector(
+        const useGenerator = document.querySelector(
           'input[name="pixel_as_generator"]:checked',
         ).value;
-        const generator =
-          useWasm === "Wasm" ? generate_pixels : generate_pixels_js;
+        let generator;
+        switch (useGenerator) {
+          case "JS":
+            generator = generate_pixels_js;
+            break;
+          case "AssemblyScript":
+            generator = generate_pixels_as;
+            break;
+          case "CPP":
+            generator = generate_pixels_cpp;
+            break;
+          default:
+            generator = generate_pixels_js;
+        }
         function render() {
           const now = performance.now();
           frameCount++;
@@ -144,6 +169,38 @@
           animationId = requestAnimationFrame(render);
         }
         render();
+      });
+
+      document.getElementById("btn_particles").addEventListener("click", () => {
+        const numberParticles = parseInt(
+          document.getElementById("number_particles").value,
+        );
+        const numberSteps = parseInt(
+          document.getElementById("number_steps").value,
+        );
+
+        let particlesBuffer = new Float32Array(
+          memoryParticles.buffer,
+          0,
+          numberParticles,
+        );
+        for (let i = 0; i < numberParticles; i++) {
+          particlesBuffer[i] = Math.random() * 400;
+        }
+
+        const ul = document.getElementById("particules-results");
+        ul.innerHTML = "";
+
+        for (let i = 0; i < numberSteps; i++) {
+          simulate_particles(0, numberParticles, 20);
+          const text =
+            `Step ${i + 1} of ${numberSteps} : ` +
+            particlesBuffer.slice(0, numberParticles).join(", ");
+
+          const li = document.createElement("li");
+          li.innerText = text;
+          ul.appendChild(li);
+        }
       });
     </script>
   </head>
@@ -205,8 +262,17 @@
         >Js <input type="radio" name="pixel_as_generator" value="JS" />
       </label>
       <label
-        >Wasm
-        <input type="radio" name="pixel_as_generator" value="Wasm" checked />
+        >AssemblyScript
+        <input
+          type="radio"
+          name="pixel_as_generator"
+          value="AssemblyScript"
+          checked
+        />
+      </label>
+      <label
+        >C++
+        <input type="radio" name="pixel_as_generator" value="CPP" checked />
       </label>
       <button type="button" id="btn_pixels_as">
         Lancer la pluie de pixels
@@ -221,6 +287,19 @@
         height="300"
         style="border: 1px solid black; margin-top: 10px"
       ></canvas>
+    </section>
+    <h2>Séance 3</h2>
+    <section>
+      <h3>Demo particules</h3>
+      <label
+        >Nombre de particules:
+        <input id="number_particles" type="number" value="5"
+      /></label>
+      <label
+        >Nombre d'étapes: <input id="number_steps" type="number" value="15"
+      /></label>
+      <button id="btn_particles">Lancer la simulation</button><br />
+      <ul id="particules-results"></ul>
     </section>
   </body>
 </html>
