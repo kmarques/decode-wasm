@@ -1,0 +1,141 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Document</title>
+    <script type="module" defer>
+      const canvas = document.getElementById("canvas_pixels_as");
+      const ctx = canvas.getContext("2d");
+      let width = canvas.width;
+      let height = canvas.height;
+      const memoryPixels = new WebAssembly.Memory({
+        initial: 150,
+      });
+      let imageBuffer;
+      const { instance: instancePixelsAs } =
+        await WebAssembly.instantiateStreaming(fetch("build/pixels_as.wasm"), {
+          env: {
+            memory: memoryPixels,
+            seed: Math.random,
+          },
+        });
+      const { instance: instancePixelsCpp } =
+        await WebAssembly.instantiateStreaming(fetch("build/pixels_cpp.wasm"), {
+          env: {
+            memory: memoryPixels,
+            seed: Math.random,
+          },
+        });
+
+      
+      const { generate_pixels: generate_pixels_as } = instancePixelsAs.exports;
+      const { generate_pixels: generate_pixels_cpp } = instancePixelsCpp.exports;
+
+      function generate_pixels_js(w, h) {
+        for (let i = 0; i < w * h * 4; i++) {
+          imageBuffer[i] = Math.floor(Math.random() * 256);
+        }
+      }
+
+      let animationId = null;
+
+      document.getElementById("btn_pixels_as").addEventListener("click", () => {
+        if (animationId) {
+          cancelAnimationFrame(animationId);
+        }
+
+        width = parseInt(document.getElementById("canvas_width").value);
+        height = parseInt(document.getElementById("canvas_height").value);
+        canvas.width = width;
+        canvas.height = height;
+
+        const neededSize = width * height * 4;
+        const currentPages = memoryPixels.buffer.byteLength / 65536;
+        const neededPages = Math.ceil(neededSize / 65536);
+        if (neededPages > currentPages) {
+          memoryPixels.grow(neededPages - currentPages);
+        }
+        imageBuffer = new Uint8ClampedArray(memoryPixels.buffer, 0, neededSize);
+
+        const fpsDisplay = document.getElementById("fps_display");
+        let lastTime = performance.now();
+        let frameCount = 0;
+
+        const useGenerator = document.querySelector(
+          'input[name="pixel_as_generator"]:checked',
+        ).value;
+        let generator;
+        switch (useGenerator) {
+          case "JS":
+            generator = generate_pixels_js;
+            break;
+          case "AssemblyScript":
+            generator = generate_pixels_as;
+            break;
+          case "CPP":
+            generator = (...args) => generate_pixels_cpp(0, ...args);
+            break;
+          default:
+            generator = generate_pixels_js;
+        }
+        function render() {
+          const now = performance.now();
+          frameCount++;
+          if (now - lastTime >= 1000) {
+            fpsDisplay.innerText = `FPS: ${frameCount}`;
+            frameCount = 0;
+            lastTime = now;
+          }
+
+          generator(width, height);
+          const imageData = new ImageData(imageBuffer, width, height);
+          ctx.putImageData(imageData, 0, 0);
+          animationId = requestAnimationFrame(render);
+        }
+        render();
+      });
+    </script>
+  </head>
+  <body>
+    <h1>Pluie de pixels</h1>
+  
+    <section>
+      <label
+        >Largeur: <input type="number" id="canvas_width" value="400" step="10"
+      /></label>
+      <label
+        >Hauteur: <input type="number" id="canvas_height" value="300" step="10"
+      /></label>
+      <br />
+      <label
+        >Js <input type="radio" name="pixel_as_generator" value="JS" />
+      </label>
+      <label
+        >AssemblyScript
+        <input
+          type="radio"
+          name="pixel_as_generator"
+          value="AssemblyScript"
+        />
+      </label>
+      <label
+        >C++
+        <input type="radio" name="pixel_as_generator" value="CPP" />
+      </label>
+      <button type="button" id="btn_pixels_as">
+        Lancer la pluie de pixels
+      </button>
+      <div id="fps_display" style="font-weight: bold; margin-top: 5px">
+        FPS: 0
+      </div>
+      <br />
+      <canvas
+        id="canvas_pixels_as"
+        width="400"
+        height="300"
+        style="border: 1px solid black; margin-top: 10px"
+      ></canvas>
+    </section>
+  </body>
+</html>

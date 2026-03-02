@@ -58,15 +58,35 @@
             memory: memoryParticles,
           },
         });
+      
+      const tableDispatcher = new WebAssembly.Table({
+        initial: 3,
+        maximum: 3,
+        element: "anyfunc",
+      });
+      const dispatchGagner = function () {alert("Score > 100")};
+      const dispatchPerdre = function () {alert("Score < 0")};
+      const dispatchNull = function () {alert("Score = 0")};
+      
+      const { instance: instanceDispatcher } =
+      await WebAssembly.instantiateStreaming(fetch("build/dispatch_event.wasm"), {
+        env: {
+          dispatcher: tableDispatcher,
+        },
+      });
+      // tableDispatcher.set(0, dispatchGagner);
+      // tableDispatcher.set(1, dispatchPerdre);
+      // tableDispatcher.set(2, dispatchNull);
 
       const { add } = instance.exports;
       const { pow } = instancePower.exports;
       const { is_premier } = instanceIsPremier.exports;
       const { fibo } = instanceFibo.exports;
       const { cesar } = instanceCesar.exports;
-      const { generate_pixels_as } = instancePixelsAs.exports;
-      const { generate_pixels_cpp } = instancePixelsCpp.exports;
+      const { generate_pixels: generate_pixels_as } = instancePixelsAs.exports;
+      const { generate_pixels: generate_pixels_cpp } = instancePixelsCpp.exports;
       const { simulate_particles } = instanceParticles.exports;
+      const { analyser_score } = instanceDispatcher.exports;
 
       const displayResult = (id, result) => {
         document.getElementById(id).innerHTML = `Résultat : ${result}`;
@@ -149,7 +169,7 @@
             generator = generate_pixels_as;
             break;
           case "CPP":
-            generator = generate_pixels_cpp;
+            generator = (...args) => generate_pixels_cpp(0, ...args);
             break;
           default:
             generator = generate_pixels_js;
@@ -201,6 +221,11 @@
           li.innerText = text;
           ul.appendChild(li);
         }
+      });
+
+      document.getElementById("btn_dispatcher").addEventListener("click", () => {
+        const score = parseInt(document.getElementById("score").value);
+        analyser_score(score);
       });
     </script>
   </head>
@@ -267,12 +292,11 @@
           type="radio"
           name="pixel_as_generator"
           value="AssemblyScript"
-          checked
         />
       </label>
       <label
         >C++
-        <input type="radio" name="pixel_as_generator" value="CPP" checked />
+        <input type="radio" name="pixel_as_generator" value="CPP" />
       </label>
       <button type="button" id="btn_pixels_as">
         Lancer la pluie de pixels
@@ -300,6 +324,11 @@
       /></label>
       <button id="btn_particles">Lancer la simulation</button><br />
       <ul id="particules-results"></ul>
+    </section>
+    <section>
+      <h3>Demo dispatcher</h3>
+      <label>Score: <input id="score" type="number" value="0" /></label>
+      <button id="btn_dispatcher">Dispatcher l'événement</button>
     </section>
   </body>
 </html>
