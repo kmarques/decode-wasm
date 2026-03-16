@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Document</title>
+    <script src="build/chrono.js"></script>
+    <script type="module" defer>
+      const result = document.getElementById("result");
+      function wait(ms) {
+        return new Promise((resolve) => setTimeout(resolve, ms));
+      }
+
+      Module.onRuntimeInitialized = async () => {
+        console.log("WASM module loaded and ready.");
+
+        for (let i = 0; i < 500; i++) {
+          const listItem = document.createElement("li");
+          result.appendChild(listItem);
+          const chrono = new Module.Chrono();
+          chrono.tick();
+          listItem.textContent = `Elapsed time: ${chrono.getCounter()} seconds`;
+          chrono.delete();
+        }
+
+        alert("All Chrono instances created.");
+      };
+    </script>
+  </head>
+  <body>
+    <h1>Chrono</h1>
+    <ul id="result"></ul>
+  </body>
+</html>

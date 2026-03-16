@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Document</title>
+    <script src="build/validator.js"></script>
+    <script type="module" defer>
+      const passwordInput = document.getElementById("password");
+      const resultElement = document.getElementById("result");
+
+      Module.onRuntimeInitialized = () => {
+        console.log("WASM module loaded and ready.");
+
+        passwordInput.addEventListener("keyup", (event) => {
+          const password = event.target.value;
+          const validationResult = Module.analyser_mdp(password);
+          resultElement.textContent = validationResult;
+        });
+      };
+    </script>
+  </head>
+  <body>
+    <h1>Password validator</h1>
+    <input type="text" id="password" placeholder="Enter your password" />
+    <p id="result"></p>
+  </body>
+</html>
